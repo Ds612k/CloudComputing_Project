@@ -1,0 +1,77 @@
+Resources:
+
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        ImageId: ami-0a91cd140a1fc148a
+        InstanceType: t2.micro
+        KeyName: !Ref KeyName
+        UserData:
+          Fn::Base64: |
+            #!/bin/bash
+            yum update -y
+            yum install -y httpd
+            echo "<h1>Auto-Scaled Web Server</h1>" > /var/www/html/index.html
+            systemctl start httpd
+            systemctl enable httpd
+        SecurityGroupIds:
+          - sg-xxxxxxxx 
+        IamInstanceProfile: !Ref EC2InstanceProfile
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: 80
+      Protocol: HTTP
+      VpcId: vpc-xxxxxxxx  
+      TargetType: instance
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+
+  ALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: my-alb
+      Subnets:
+        - subnet-xxxxxxxx
+        - subnet-yyyyyyyy
+      SecurityGroups:
+        - sg-xxxxxxxx
+      Scheme: internet-facing
+      Type: application
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+      LoadBalancerArn: !Ref ALB
+      Port: 80
+      Protocol: HTTP
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      MinSize: '2'
+      MaxSize: '4'
+      DesiredCapacity: '2'
+      VPCZoneIdentifier:
+        - subnet-xxxxxxxx
+        - subnet-yyyyyyyy
+      TargetGroupARNs:
+        - !Ref TargetGroup
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+
+  ScalePolicyCPU:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        TargetValue: 60.0
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
