@@ -1,0 +1,51 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: LambdaS3LoggingRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaLoggingPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: arn:aws:s3:::your-s3-bucket-name/*
+
+  S3UploadLoggerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: LogS3UploadsFunction
+      Handler: lambda_log_s3_upload.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.9
+      Timeout: 30
+      Code:
+        S3Bucket: your-code-bucket-name
+        S3Key: lambda_log_s3_upload.zip
+      Events:
+        S3Upload:
+          Type: S3
+          Properties:
+            Bucket: your-s3-bucket-name
+            Events: s3:ObjectCreated:*
+
+Outputs:
+  LambdaFunctionName:
+    Value: !Ref S3UploadLoggerFunction
